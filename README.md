@@ -201,3 +201,11 @@ k8s                              # Kubernetes manifests
 Dockerfile                       # multi-stage container image
 docker-compose.yml               # local Postgres + API stack
 ```
+
+## What is missing
+
+I tried to implement from the bonus:
+Observability: structured logs with slog, Prometheus metrics (orders placed, priced, rejected),
+OpenTelemetry tracing.
+
+I would simply add a log for every error, and a metric for every core business function, there were version issues and I couldnt complete in time

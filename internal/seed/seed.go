@@ -31,7 +31,7 @@ func Load() ([]*domain.Fund, []*domain.Account) {
 	accounts := []*domain.Account{
 		{
 			ID:            "ACC-1",
-			Cash:          domain.Money(1000_00), // €10,000.00
+			Cash:          domain.Money(1_000_000), // €10,000.00
 			Positions:     map[string]domain.Units{"FUND-A": domain.Units(100_0000)},
 			ReservedUnits: map[string]domain.Units{},
 		},

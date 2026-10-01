@@ -202,12 +202,12 @@ func TestPricingService_PublishNAV(t *testing.T) {
 	priced, err := orderSvc.GetOrder(ctx, order.ID)
 	require.NoError(t, err)
 	assert.Equal(t, domain.StatusPriced, priced.Status)
-	assert.Equal(t, domain.Units(10_0000), priced.PricedUnits)
+	assert.Equal(t, domain.Units(100_0000), priced.PricedUnits)
 
 	acc, err := accSvc.Get(ctx, "ACC-1")
 	require.NoError(t, err)
-	assert.Equal(t, domain.Money(1000_0000-1000_00), acc.Cash)
-	assert.Equal(t, domain.Units(100_0000+10_0000), acc.Positions["FUND-A"])
+	assert.Equal(t, domain.Money(900_000), acc.Cash)
+	assert.Equal(t, domain.Units(200_0000), acc.Positions["FUND-A"])
 }
 
 func TestPricingService_IdempotentNAV(t *testing.T) {

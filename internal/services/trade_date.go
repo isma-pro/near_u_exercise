@@ -19,27 +19,38 @@ func NewTradeDateCalculator() *TradeDateCalculator {
 // the received time and the fund cut-off.
 func (c *TradeDateCalculator) TradeDate(fund *domain.Fund, received time.Time) time.Time {
 	local := received.In(fund.Timezone)
-	cutoff := fund.CutOffFor(local)
+	y, m, d := local.Date()
+	cutoff := time.Date(y, m, d, fund.CutOff.Hour(), fund.CutOff.Minute(), 0, 0, fund.Timezone)
 
-	candidate := local
+	candidate := civilDate{y, m, d}
 	if !local.Before(cutoff) {
-		candidate = candidate.AddDate(0, 0, 1)
+		candidate = candidate.addDays(1)
 	}
 
-	candidate = startOfDay(candidate)
-	for isWeekend(candidate) {
-		candidate = candidate.AddDate(0, 0, 1)
+	for candidate.weekday() == time.Saturday || candidate.weekday() == time.Sunday {
+		candidate = candidate.addDays(1)
 	}
 
-	return candidate.UTC()
+	return candidate.toTime()
 }
 
-func startOfDay(t time.Time) time.Time {
-	y, m, d := t.Date()
-	return time.Date(y, m, d, 0, 0, 0, 0, t.Location())
+// civilDate holds a calendar date without a time-of-day or location.
+type civilDate struct {
+	year  int
+	month time.Month
+	day   int
 }
 
-func isWeekend(t time.Time) bool {
-	wd := t.Weekday()
-	return wd == time.Saturday || wd == time.Sunday
+func (d civilDate) addDays(n int) civilDate {
+	t := time.Date(d.year, d.month, d.day, 0, 0, 0, 0, time.UTC).AddDate(0, 0, n)
+	y, m, day := t.Date()
+	return civilDate{y, m, day}
+}
+
+func (d civilDate) weekday() time.Weekday {
+	return time.Date(d.year, d.month, d.day, 0, 0, 0, 0, time.UTC).Weekday()
+}
+
+func (d civilDate) toTime() time.Time {
+	return time.Date(d.year, d.month, d.day, 0, 0, 0, 0, time.UTC)
 }

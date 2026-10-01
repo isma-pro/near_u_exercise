@@ -35,7 +35,7 @@ func TestAccountRepository_Get(t *testing.T) {
 
 	acc, err := repo.Get(context.Background(), "ACC-1")
 	require.NoError(t, err)
-	assert.Equal(t, domain.Money(1000_00), acc.Cash)
+	assert.Equal(t, domain.Money(1_000_000), acc.Cash)
 	assert.Equal(t, domain.Units(100_0000), acc.Positions["FUND-A"])
 }
 

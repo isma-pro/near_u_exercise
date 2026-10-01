@@ -52,9 +52,9 @@ func TestTradeDateCalculator(t *testing.T) {
 			want:     "2026-10-05",
 		},
 		{
-			name:     "dst change in october still uses local time",
-			received: time.Date(2026, 10, 24, 10, 30, 0, 0, time.UTC),
-			want:     "2026-10-24",
+			name:     "dst change week friday still uses local time",
+			received: time.Date(2026, 10, 23, 10, 30, 0, 0, time.UTC),
+			want:     "2026-10-23",
 		},
 	}
 

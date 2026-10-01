@@ -2,7 +2,10 @@
 
 A small Go + Gin REST API for placing and pricing fund subscription/redemption orders.
 
-This implementation covers **Tier 1** of the exercise: in-memory storage, deterministic business logic and unit tests with the race detector.
+This implementation covers **Tier 1** and **Tier 2** of the exercise:
+
+- Tier 1: in-memory storage, deterministic business logic and unit tests with the race detector.
+- Tier 2: PostgreSQL-backed repositories, integration tests with `testcontainers-go`, Docker / Docker Compose, Kubernetes manifests and GitLab CI.
 
 ## How money, units and NAV are represented
 
@@ -16,6 +19,8 @@ Values are sent/received as JSON strings (e.g. `"1000.00"`, `"33.3333"`). Parsin
 
 ## Run the service
 
+### In-memory (Tier 1)
+
 ```bash
 go run ./cmd/api
 ```
@@ -26,6 +31,20 @@ The server listens on `:8080` by default. Set `PORT` to change it:
 PORT=3000 go run ./cmd/api
 ```
 
+### With PostgreSQL (Tier 2)
+
+Set `DATABASE_URL` and the app will run migrations and seed the database on startup:
+
+```bash
+DATABASE_URL="postgres://nearu:nearu@localhost:5432/nearu?sslmode=disable" go run ./cmd/api
+```
+
+Or use Docker Compose:
+
+```bash
+docker compose up --build
+```
+
 ## Run the tests
 
 ```bash
@@ -34,7 +53,12 @@ go test -race ./...
 
 # run with coverage
 go test -race -cover ./...
+
+# PostgreSQL integration tests (requires Docker)
+go test -tags=integration -race ./internal/repositories/postgres/...
 ```
+
+Integration tests use `testcontainers-go` to spin up a real Postgres container, apply migrations, seed data and exercise the PostgreSQL repositories.
 
 ## Example curl requests
 
@@ -117,25 +141,63 @@ curl http://localhost:8080/readyz
 - `AccountService` keeps `ReservedCash` and `ReservedUnits` fields separate from actual balances, so `available cash = cash - reserved cash` and `available units = positions - reserved units`.
 - `PricingService` pre-computes every order for the fund/date, then applies all balance updates only after every precheck passes. A mutex also serialises NAV publishing.
 
-### With many replicas (planned for Tier 2)
+### With many replicas (Tier 2)
 
-The in-memory mutex will be replaced by a PostgreSQL transaction:
+When `DATABASE_URL` is set the service uses PostgreSQL and the same business logic is wrapped in database transactions:
 
 - `SELECT FOR UPDATE` on affected accounts and orders.
 - A unique constraint on `idempotency_keys` to detect key/body mismatches across replicas.
 - Pricing runs in a single transaction so either every order is priced and all balances updated, or nothing changes.
+- The `UnitOfWork` abstraction makes the service code backend-agnostic: it is a no-op mutex for memory and a real `pgx` transaction for Postgres.
+
+## Kubernetes
+
+Apply the manifests in order:
+
+```bash
+kubectl apply -f k8s/namespace.yaml
+kubectl apply -f k8s/configmap.yaml
+kubectl apply -f k8s/secret.yaml
+kubectl apply -f k8s/deployment.yaml
+kubectl apply -f k8s/service.yaml
+```
+
+Update `k8s/secret.yaml` with your real `DATABASE_URL` before applying it in a real cluster.
+
+The Deployment exposes `/healthz` (liveness) and `/readyz` (readiness), uses graceful shutdown and runs two replicas by default.
+
+Optional Tier 3 manifests are also included:
+
+```bash
+kubectl apply -f k8s/hpa.yaml
+kubectl apply -f k8s/pdb.yaml
+```
+
+## GitLab CI
+
+`.gitlab-ci.yml` runs:
+
+1. Unit tests (`go test -race ./...`).
+2. PostgreSQL integration tests in Docker-in-Docker (`go test -tags=integration -race ./internal/repositories/postgres/...`).
+3. Docker build and push to the GitLab Container Registry on `main`.
 
 ## Project layout
 
 ```
-cmd/api                 # entry point and server wiring
-internal/clock          # real and fixed clocks for testability
-internal/config         # environment-based configuration
-internal/domain         # Money/Units/NAV types and fund/account/order/event entities
-internal/handlers       # HTTP handlers and DTOs
-internal/repositories   # storage interfaces
-internal/repositories/memory  # thread-safe in-memory implementation
-internal/routes         # route registration
-internal/seed           # hard-coded funds and accounts
-internal/services       # business logic: trade-date, account, order, pricing
+cmd/api                          # entry point and server wiring
+internal/clock                   # real and fixed clocks for testability
+internal/config                  # environment-based configuration
+internal/db                      # PostgreSQL connection pool and migration runner
+internal/domain                  # Money/Units/NAV types and fund/account/order/event entities
+internal/handlers                # HTTP handlers and DTOs
+internal/repositories            # storage interfaces
+internal/repositories/memory     # thread-safe in-memory implementation
+internal/repositories/postgres   # PostgreSQL implementation with transactions
+internal/routes                  # route registration
+internal/seed                    # hard-coded funds and accounts
+internal/services                # business logic: trade-date, account, order, pricing
+migrations                       # SQL schema
+k8s                              # Kubernetes manifests
+Dockerfile                       # multi-stage container image
+docker-compose.yml               # local Postgres + API stack
 ```

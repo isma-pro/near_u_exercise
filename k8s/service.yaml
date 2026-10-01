@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: near-u-api
+  namespace: near-u-exercise
+spec:
+  selector:
+    app: near-u-api
+  ports:
+    - port: 80
+      targetPort: 8080
+  type: ClusterIP

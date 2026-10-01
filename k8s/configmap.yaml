@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: near-u-api-config
+  namespace: near-u-exercise
+data:
+  ENV: "production"
+  PORT: "8080"
+  SHUTDOWN_TIMEOUT: "10s"
+  SERVER_READ_TIMEOUT: "15s"
+  SERVER_WRITE_TIMEOUT: "15s"
+  SERVER_IDLE_TIMEOUT: "60s"

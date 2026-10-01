@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: near-u-api
+  namespace: near-u-exercise
+  labels:
+    app: near-u-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: near-u-api
+  template:
+    metadata:
+      labels:
+        app: near-u-api
+    spec:
+      containers:
+        - name: api
+          image: near-u-exercise:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: near-u-api-config
+            - secretRef:
+                name: near-u-api-secrets
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "100m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
+      terminationGracePeriodSeconds: 30

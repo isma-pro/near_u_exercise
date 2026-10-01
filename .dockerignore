@@ -1,0 +1,11 @@
+.git
+.gitignore
+*.md
+Dockerfile
+docker-compose.yml
+.dockerignore
+.github
+.gitlab-ci.yml
+k8s/
+bin/
+postgres_test

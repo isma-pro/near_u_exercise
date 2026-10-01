@@ -241,7 +241,21 @@ func TestOrderRepository_ListCursor(t *testing.T) {
 func TestEventRepository_ListForOrder(t *testing.T) {
 	deps := setupTestDB(t)
 	repo := NewEventRepository(deps.pool)
+	orderRepo := NewOrderRepository(deps.pool)
 	ctx := context.Background()
+
+	now := time.Now().UTC()
+	require.NoError(t, orderRepo.Create(ctx, &domain.Order{
+		ID:        "ORDER-1",
+		AccountID: "ACC-1",
+		FundID:    "FUND-A",
+		Side:      domain.SideSubscription,
+		Amount:    domain.Money(100_00),
+		Status:    domain.StatusReceived,
+		TradeDate: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC),
+		CreatedAt: now,
+		UpdatedAt: now,
+	}))
 
 	require.NoError(t, repo.Append(ctx, &domain.OrderEvent{
 		OrderID: "ORDER-1",
@@ -264,7 +278,23 @@ func TestEventRepository_ListForOrder(t *testing.T) {
 func TestIdempotencyRepository_Conflict(t *testing.T) {
 	deps := setupTestDB(t)
 	repo := NewIdempotencyRepository(deps.pool)
+	orderRepo := NewOrderRepository(deps.pool)
 	ctx := context.Background()
+	now := time.Now().UTC()
+
+	for _, id := range []string{"ORDER-1", "ORDER-2"} {
+		require.NoError(t, orderRepo.Create(ctx, &domain.Order{
+			ID:        id,
+			AccountID: "ACC-1",
+			FundID:    "FUND-A",
+			Side:      domain.SideSubscription,
+			Amount:    domain.Money(100_00),
+			Status:    domain.StatusReceived,
+			TradeDate: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC),
+			CreatedAt: now,
+			UpdatedAt: now,
+		}))
+	}
 
 	require.NoError(t, repo.Save(ctx, "key-1", &repositories.IdempotencyEntry{OrderID: "ORDER-1", Fingerprint: "fp-1"}))
 

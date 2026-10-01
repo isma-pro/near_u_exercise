@@ -1,12 +1,21 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"log"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/gin-gonic/gin"
+	"github.com/ismaelucky94/near_u_exercise/internal/clock"
 	"github.com/ismaelucky94/near_u_exercise/internal/config"
+	"github.com/ismaelucky94/near_u_exercise/internal/repositories/memory"
 	"github.com/ismaelucky94/near_u_exercise/internal/routes"
+	"github.com/ismaelucky94/near_u_exercise/internal/seed"
+	"github.com/ismaelucky94/near_u_exercise/internal/services"
 )
 
 func main() {
@@ -16,12 +25,61 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	r := gin.Default()
+	funds, accounts := seed.Load()
+	store := memory.NewStore(funds, accounts)
 
-	routes.Register(r)
+	fundRepo := memory.NewFundRepository(store)
+	accountRepo := memory.NewAccountRepository(store)
+	orderRepo := memory.NewOrderRepository(store)
+	eventRepo := memory.NewEventRepository(store)
+	idempotencyRepo := memory.NewIdempotencyRepository(store)
+	navRepo := memory.NewNAVRepository(store)
 
-	if err := r.Run(":" + cfg.Port); err != nil {
-		log.Printf("Server failed: %v", err)
-		os.Exit(1)
+	accSvc := services.NewAccountService(accountRepo)
+	calc := services.NewTradeDateCalculator()
+	clk := clock.RealClock{}
+	orderSvc := services.NewOrderService(fundRepo, accSvc, orderRepo, eventRepo, idempotencyRepo, calc, clk)
+	pricingSvc := services.NewPricingService(fundRepo, accSvc, orderRepo, eventRepo, navRepo, clk)
+
+	router := gin.New()
+	router.Use(gin.Recovery())
+
+	routes.Register(router, routes.Dependencies{
+		Orders:   orderSvc,
+		Accounts: accSvc,
+		Pricing:  pricingSvc,
+		Ready:    func() bool { return true },
+	})
+
+	server := &http.Server{
+		Addr:         ":" + cfg.Port,
+		Handler:      router,
+		ReadTimeout:  cfg.ReadTimeout,
+		WriteTimeout: cfg.WriteTimeout,
+		IdleTimeout:  cfg.IdleTimeout,
+	}
+
+	srvErr := make(chan error, 1)
+	go func() {
+		log.Printf("server listening on %s", server.Addr)
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			srvErr <- err
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGTERM, syscall.SIGINT)
+
+	select {
+	case err := <-srvErr:
+		log.Fatalf("server error: %v", err)
+	case sig := <-quit:
+		log.Printf("received signal %s, shutting down", sig)
+		ctx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+		defer cancel()
+		if err := server.Shutdown(ctx); err != nil {
+			log.Printf("graceful shutdown failed: %v", err)
+		}
+		log.Println("server stopped")
 	}
 }

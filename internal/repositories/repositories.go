@@ -74,3 +74,10 @@ type NAVRepository interface {
 	Get(ctx context.Context, fundID string, date time.Time) (domain.NAV, bool, error)
 	Save(ctx context.Context, fundID string, date time.Time, nav domain.NAV) error
 }
+
+// UnitOfWork runs a block of repository operations atomically.
+// The in-memory implementation uses an in-process lock; the PostgreSQL
+// implementation uses a database transaction.
+type UnitOfWork interface {
+	Run(ctx context.Context, fn func(context.Context) error) error
+}

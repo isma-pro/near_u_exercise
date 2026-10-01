@@ -36,6 +36,7 @@ type OrderService struct {
 	orders      repositories.OrderRepository
 	events      repositories.EventRepository
 	idempotency repositories.IdempotencyRepository
+	uow         repositories.UnitOfWork
 	calc        *TradeDateCalculator
 	clock       clock.Clock
 	idGen       func() string
@@ -48,6 +49,7 @@ func NewOrderService(
 	orders repositories.OrderRepository,
 	events repositories.EventRepository,
 	idempotency repositories.IdempotencyRepository,
+	uow repositories.UnitOfWork,
 	calc *TradeDateCalculator,
 	clk clock.Clock,
 ) *OrderService {
@@ -57,6 +59,7 @@ func NewOrderService(
 		orders:      orders,
 		events:      events,
 		idempotency: idempotency,
+		uow:         uow,
 		calc:        calc,
 		clock:       clk,
 		idGen:       uuid.NewString,
@@ -73,6 +76,16 @@ func (s *OrderService) PlaceOrder(ctx context.Context, input PlaceOrderInput) (*
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	var order *domain.Order
+	err := s.uow.Run(ctx, func(txCtx context.Context) error {
+		var err error
+		order, err = s.placeInTx(txCtx, input)
+		return err
+	})
+	return order, err
+}
+
+func (s *OrderService) placeInTx(ctx context.Context, input PlaceOrderInput) (*domain.Order, error) {
 	existing, err := s.idempotency.Get(ctx, input.IdempotencyKey)
 	if err == nil {
 		if existing.Fingerprint != input.Fingerprint {
@@ -173,6 +186,16 @@ func (s *OrderService) CancelOrder(ctx context.Context, orderID string) (*domain
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	var order *domain.Order
+	err := s.uow.Run(ctx, func(txCtx context.Context) error {
+		var err error
+		order, err = s.cancelInTx(txCtx, orderID)
+		return err
+	})
+	return order, err
+}
+
+func (s *OrderService) cancelInTx(ctx context.Context, orderID string) (*domain.Order, error) {
 	order, err := s.orders.Get(ctx, orderID)
 	if err != nil {
 		return nil, err

@@ -38,8 +38,9 @@ func setupRouter(t *testing.T) (*gin.Engine, *services.OrderService, *services.P
 	calc := services.NewTradeDateCalculator()
 	now := time.Date(2026, 10, 2, 10, 0, 0, 0, time.UTC)
 	clk := clock.FixedClock{Instant: now}
-	orderSvc := services.NewOrderService(fundRepo, accSvc, orderRepo, eventRepo, idempotencyRepo, calc, clk)
-	pricingSvc := services.NewPricingService(fundRepo, accSvc, orderRepo, eventRepo, navRepo, clk)
+	uow := memory.NewUnitOfWork(store)
+	orderSvc := services.NewOrderService(fundRepo, accSvc, orderRepo, eventRepo, idempotencyRepo, uow, calc, clk)
+	pricingSvc := services.NewPricingService(fundRepo, accSvc, orderRepo, eventRepo, navRepo, uow, clk)
 
 	r := gin.Default()
 	routes.Register(r, routes.Dependencies{

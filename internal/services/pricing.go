@@ -19,6 +19,7 @@ type PricingService struct {
 	orders   repositories.OrderRepository
 	events   repositories.EventRepository
 	navs     repositories.NAVRepository
+	uow      repositories.UnitOfWork
 	clock    clock.Clock
 }
 
@@ -29,6 +30,7 @@ func NewPricingService(
 	orders repositories.OrderRepository,
 	events repositories.EventRepository,
 	navs repositories.NAVRepository,
+	uow repositories.UnitOfWork,
 	clk clock.Clock,
 ) *PricingService {
 	return &PricingService{
@@ -37,6 +39,7 @@ func NewPricingService(
 		orders:   orders,
 		events:   events,
 		navs:     navs,
+		uow:      uow,
 		clock:    clk,
 	}
 }
@@ -60,6 +63,12 @@ func (s *PricingService) PublishNAV(ctx context.Context, fundID string, date tim
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	return s.uow.Run(ctx, func(txCtx context.Context) error {
+		return s.publishInTx(txCtx, fundID, date, nav, fund)
+	})
+}
+
+func (s *PricingService) publishInTx(ctx context.Context, fundID string, date time.Time, nav domain.NAV, fund *domain.Fund) error {
 	navDate := dateOnly(date)
 
 	if existing, ok, _ := s.navs.Get(ctx, fundID, navDate); ok {
@@ -155,7 +164,7 @@ func (s *PricingService) PublishNAV(ctx context.Context, fundID string, date tim
 		}
 	}
 
-	_ = fund // fund is used only for existence validation in memory tier
+	_ = fund
 	return nil
 }
 

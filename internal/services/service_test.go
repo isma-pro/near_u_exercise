@@ -30,8 +30,9 @@ func setupServices(t *testing.T, now time.Time) (*OrderService, *PricingService,
 	accSvc := NewAccountService(accountRepo)
 	calc := NewTradeDateCalculator()
 	clk := clock.FixedClock{Instant: now}
-	orderSvc := NewOrderService(fundRepo, accSvc, orderRepo, eventRepo, idempotencyRepo, calc, clk)
-	pricingSvc := NewPricingService(fundRepo, accSvc, orderRepo, eventRepo, navRepo, clk)
+	uow := memory.NewUnitOfWork(store)
+	orderSvc := NewOrderService(fundRepo, accSvc, orderRepo, eventRepo, idempotencyRepo, uow, calc, clk)
+	pricingSvc := NewPricingService(fundRepo, accSvc, orderRepo, eventRepo, navRepo, uow, clk)
 
 	return orderSvc, pricingSvc, accSvc, store
 }

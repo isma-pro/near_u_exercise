@@ -12,7 +12,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/ismaelucky94/near_u_exercise/internal/clock"
 	"github.com/ismaelucky94/near_u_exercise/internal/config"
+	"github.com/ismaelucky94/near_u_exercise/internal/db"
+	"github.com/ismaelucky94/near_u_exercise/internal/repositories"
 	"github.com/ismaelucky94/near_u_exercise/internal/repositories/memory"
+	"github.com/ismaelucky94/near_u_exercise/internal/repositories/postgres"
 	"github.com/ismaelucky94/near_u_exercise/internal/routes"
 	"github.com/ismaelucky94/near_u_exercise/internal/seed"
 	"github.com/ismaelucky94/near_u_exercise/internal/services"
@@ -26,20 +29,59 @@ func main() {
 	}
 
 	funds, accounts := seed.Load()
-	store := memory.NewStore(funds, accounts)
 
-	fundRepo := memory.NewFundRepository(store)
-	accountRepo := memory.NewAccountRepository(store)
-	orderRepo := memory.NewOrderRepository(store)
-	eventRepo := memory.NewEventRepository(store)
-	idempotencyRepo := memory.NewIdempotencyRepository(store)
-	navRepo := memory.NewNAVRepository(store)
+	var (
+		fundRepo        repositories.FundRepository
+		accountRepo     repositories.AccountRepository
+		orderRepo       repositories.OrderRepository
+		eventRepo       repositories.EventRepository
+		idempotencyRepo repositories.IdempotencyRepository
+		navRepo         repositories.NAVRepository
+		uow             repositories.UnitOfWork
+		ready           = func() bool { return true }
+	)
+
+	if cfg.DatabaseURL != "" {
+		ctx := context.Background()
+		pool, err := db.Open(ctx, cfg.DatabaseURL)
+		if err != nil {
+			log.Fatalf("database connection failed: %v", err)
+		}
+		defer pool.Close()
+
+		if err := db.MigrateFromFile(ctx, pool, "migrations/001_init.up.sql"); err != nil {
+			log.Fatalf("database migration failed: %v", err)
+		}
+		if err := postgres.Seed(ctx, pool, funds, accounts); err != nil {
+			log.Fatalf("database seed failed: %v", err)
+		}
+
+		fundRepo = postgres.NewFundRepository(pool)
+		accountRepo = postgres.NewAccountRepository(pool)
+		orderRepo = postgres.NewOrderRepository(pool)
+		eventRepo = postgres.NewEventRepository(pool)
+		idempotencyRepo = postgres.NewIdempotencyRepository(pool)
+		navRepo = postgres.NewNAVRepository(pool)
+		uow = postgres.NewUnitOfWork(pool)
+		ready = func() bool {
+			return pool.Ping(ctx) == nil
+		}
+	} else {
+		store := memory.NewStore(funds, accounts)
+		fundRepo = memory.NewFundRepository(store)
+		accountRepo = memory.NewAccountRepository(store)
+		orderRepo = memory.NewOrderRepository(store)
+		eventRepo = memory.NewEventRepository(store)
+		idempotencyRepo = memory.NewIdempotencyRepository(store)
+		navRepo = memory.NewNAVRepository(store)
+		uow = memory.NewUnitOfWork(store)
+	}
 
 	accSvc := services.NewAccountService(accountRepo)
 	calc := services.NewTradeDateCalculator()
 	clk := clock.RealClock{}
-	orderSvc := services.NewOrderService(fundRepo, accSvc, orderRepo, eventRepo, idempotencyRepo, calc, clk)
-	pricingSvc := services.NewPricingService(fundRepo, accSvc, orderRepo, eventRepo, navRepo, clk)
+	orderSvc := services.NewOrderService(fundRepo, accSvc, orderRepo, eventRepo, idempotencyRepo, uow, calc, clk)
+	pricingSvc := services.NewPricingService(fundRepo, accSvc, orderRepo, eventRepo, navRepo, uow, clk)
 
 	router := gin.New()
 	router.Use(gin.Recovery())
@@ -48,7 +90,7 @@ func main() {
 		Orders:   orderSvc,
 		Accounts: accSvc,
 		Pricing:  pricingSvc,
-		Ready:    func() bool { return true },
+		Ready:    ready,
 	})
 
 	server := &http.Server{

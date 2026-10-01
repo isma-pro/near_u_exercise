@@ -24,6 +24,7 @@ type ListCursor struct {
 // ListOrdersFilter controls pagination and filtering for orders.
 type ListOrdersFilter struct {
 	AccountID string
+	FundID    string
 	Status    domain.Status
 	Limit     int
 	Cursor    ListCursor
@@ -66,4 +67,10 @@ type IdempotencyEntry struct {
 type IdempotencyRepository interface {
 	Get(ctx context.Context, key string) (*IdempotencyEntry, error)
 	Save(ctx context.Context, key string, entry *IdempotencyEntry) error
+}
+
+// NAVRepository stores published NAVs per fund and date.
+type NAVRepository interface {
+	Get(ctx context.Context, fundID string, date time.Time) (domain.NAV, bool, error)
+	Save(ctx context.Context, fundID string, date time.Time, nav domain.NAV) error
 }

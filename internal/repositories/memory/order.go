@@ -54,6 +54,9 @@ func (r *OrderRepository) List(ctx context.Context, filter repositories.ListOrde
 		if filter.AccountID != "" && o.AccountID != filter.AccountID {
 			continue
 		}
+		if filter.FundID != "" && o.FundID != filter.FundID {
+			continue
+		}
 		if filter.Status != "" && o.Status != filter.Status {
 			continue
 		}

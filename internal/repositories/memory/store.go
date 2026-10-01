@@ -15,6 +15,7 @@ type Store struct {
 	orders      map[string]*domain.Order
 	events      map[string][]*domain.OrderEvent
 	idempotency map[string]*repositories.IdempotencyEntry
+	navs        map[string]domain.NAV
 }
 
 // NewStore returns an empty Store seeded with the provided funds and accounts.
@@ -41,5 +42,6 @@ func NewStore(funds []*domain.Fund, accounts []*domain.Account) *Store {
 		orders:      make(map[string]*domain.Order),
 		events:      make(map[string][]*domain.OrderEvent),
 		idempotency: make(map[string]*repositories.IdempotencyEntry),
+		navs:        make(map[string]domain.NAV),
 	}
 }
